@@ -1,0 +1,11 @@
+# virtualenv
+venv/
+
+# Pytest cache
+cache
+
+# Python cache
+__pycache__
+
+# Pycharm project config
+.idea

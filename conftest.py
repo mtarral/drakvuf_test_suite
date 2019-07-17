@@ -311,7 +311,6 @@ def ev_queue(request, drak_proc):
     # on reading a line from Drakvuf stdout
     logging.debug('stopping drakvuf')
     drak_proc.send_signal(signal.SIGINT)
-    drak_proc.wait(10)
     event_thread.join()
     # make sure the timeout thread is completed now
     timeout_thread.join()

@@ -9,3 +9,7 @@ __pycache__
 
 # Pycharm project config
 .idea
+
+# log files
+pytest.log
+drakvuf_stderr.log

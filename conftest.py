@@ -185,7 +185,7 @@ def follow_process(injection_enabled, guest_binary_path, drak_proc, queue, compl
                     current = PureWindowsPath(event['ProcessName'])
                     if event['Method'] == 'NtCreateUserProcess':
                         created = PureWindowsPath(event['ImagePathName'])
-                        logging.info('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
+                        logging.debug('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
                         # Ansible injection method: match binary name
                         # creatproc/shellexec: match conhost.exe (must start a command line application)
                         if created.name == guest_binary_name\
@@ -195,7 +195,7 @@ def follow_process(injection_enabled, guest_binary_path, drak_proc, queue, compl
                             logging.info('target started: %s (%d)', created.name, target_pid)
                     if event['Method'] == 'NtTerminateProcess':
                         destructed = int(event['ExitPid'])
-                        logging.info('process %s killed %d', current.name, destructed)
+                        logging.debug('process %s killed %d', current.name, destructed)
                         if destructed == target_pid:
                             completed_process.set()
                             # push None in queue to indicate end of events
@@ -216,15 +216,15 @@ def test_timeout(queue, completed_process):
 
 
 # thread to watch drakvuf if process injection fails and it dies early
-def watch_dead(drak_proc, queue):
-    while True:
+def watch_dead(drak_proc, queue, completed_process):
+    while not completed_process.is_set():
         try:
-            ret = drak_proc.wait(1)
+            drak_proc.wait(1)
         except subprocess.TimeoutExpired:
             pass
         else:
             # drakvuf died, send stop event
-            logging.info('drakvuf process terminated')
+            logging.info('drakvuf process terminated early')
             queue.put(None)
             break
 
@@ -274,7 +274,7 @@ def ev_queue(request, drak_proc):
         ansible_thread.start()
     # follow process execution
     # stop drakvuf
-    dead_thread = threading.Thread(target=watch_dead, args=(drak_proc, queue))
+    dead_thread = threading.Thread(target=watch_dead, args=(drak_proc, queue, completed_process))
     dead_thread.start()
     event_thread = threading.Thread(target=follow_process, args=(injection_enabled, guest_test_bin, drak_proc, queue, completed_process))
     event_thread.start()
@@ -288,16 +288,18 @@ def ev_queue(request, drak_proc):
     yield run_info
     logging.info('test finished')
     # test has completed
-    # terminate follow_process thread loop (if injection was disabled, or
-    # we missed an event to intercept targeted process creation or termination)
+    # ensure the event thread has terminated
+    # event_thread: if have missed the process creation, setting the completed process anyway
+    # will unlock the loop and allow the thread to terminate gracefully
     completed_process.set()
+    event_thread.join()
+    dead_thread.join()
     # stop drakvuf
     logging.debug('stopping drakvuf')
     drak_proc.send_signal(signal.SIGINT)
     drak_proc.wait(10)
-    # make sure our threads are completed
-    event_thread.join()
+    # make sure the timeout thread is completed now
     timeout_thread.join()
-    dead_thread.join()
+    # also wait for Ansible to stop
     if injection_method == 'ansible':
         ansible_thread.join()

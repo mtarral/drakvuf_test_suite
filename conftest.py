@@ -39,22 +39,37 @@ DRAKVUF_PLUGIN_LIST = [
     'ssdtmon',
     'windowmon'
 ]
-DEFAULT_ENABLE_INJECTION = True
-DEFAULT_GUEST_TEST_BIN = 'C:\\Windows\\System32\\cmd.exe'
+# reg.exe exits immediately and prints helps if it has no argument
+# useful to test a simple binary execution on the guest
+DEFAULT_GUEST_TEST_BIN = 'C:\\Windows\\System32\\reg.exe'
 DEFAULT_TIMEOUT = 60
 DEFAULT_INJECTION_CANDIDATE = 'taskmgr'
-# createproc, shellexec, ansible
-DEFAULT_INJECTION_METHOD = 'shellexec'
 
 
 # add command line options to specify domain and profile
 def pytest_addoption(parser):
     parser.addoption(
-        '--domain', action='store', help='Specify domain name'
+        '--domain', action='store', help='Drakvuf domain name'
     )
     parser.addoption(
-        '--profile', action='store', help='Specify kernel rekall profile'
+        '--profile', action='store', help='Drakvuf domain kernel rekall profile'
     )
+    parser.addoption(
+        '--inject-method', action='store', help='Drakvuf injection method (+ansible)'
+    )
+    parser.addoption(
+        '--inject-file', action='store', help='Drakvuf remote process executable path to be created'
+    )
+    parser.addoption(
+        '--inject-process', action='store', help='Drakvuf remote process to use as an injection target'
+    )
+
+
+def cmdline_opt(request, option, default=None):
+    value = request.config.getoption(option)
+    if not value:
+        return default
+    return value
 
 
 # make test status available in fixture teardown code
@@ -125,20 +140,18 @@ def drak_proc(request):
     cmdline.extend(plugins)
     cmdline.extend(output_fmt)
 
-    injection_enabled = getattr(request.module, "ENABLE_INJECTION", DEFAULT_ENABLE_INJECTION)
-    # get injection method
-    injection_method = getattr(request.module, "INJECTION_METHOD", DEFAULT_INJECTION_METHOD)
-    if injection_enabled and injection_method != 'ansible':
-        domain = request.config.getoption('--domain')
-        candidate_name = getattr(request.module, "INJECTION_CANDIDATE", DEFAULT_INJECTION_CANDIDATE)
-        candidate = injection_candidate(domain, candidate_name)
+    inj_method = request.config.getoption('--inject-method')
+    inj_enabled = True if inj_method else False
+    if inj_enabled and inj_method != 'ansible':
+        candidate_name = cmdline_opt(request, '--inject-process', DEFAULT_INJECTION_CANDIDATE)
+        candidate = injection_candidate(domain_name, candidate_name)
         candidate_pid = candidate[0]
-        injection_cmd = ['-i', str(candidate_pid), '-m', injection_method]
+        inj_cmd = ['-i', str(candidate_pid), '-m', inj_method]
         global_search = ['-g']
-        guest_test_bin = getattr(request.module, "GUEST_TEST_BIN", DEFAULT_GUEST_TEST_BIN)
-        remote_bin = ['-e', guest_test_bin]
+        inj_file = cmdline_opt(request, '--inject-file', DEFAULT_GUEST_TEST_BIN)
+        remote_bin = ['-e', inj_file]
         cmdline.extend(remote_bin)
-        cmdline.extend(injection_cmd)
+        cmdline.extend(inj_cmd)
         cmdline.extend(global_search)
 
     cmdline.extend(verbose)
@@ -265,18 +278,19 @@ def ev_queue(request, drak_proc):
     # create event queue
     queue = Queue()
     completed_process = threading.Event()
-    injection_enabled = getattr(request.module, "ENABLE_INJECTION", DEFAULT_ENABLE_INJECTION)
-    injection_method = getattr(request.module, "INJECTION_METHOD", DEFAULT_INJECTION_METHOD)
-    guest_test_bin = getattr(request.module, "GUEST_TEST_BIN", DEFAULT_GUEST_TEST_BIN)
-    if injection_method == 'ansible':
+    inj_method = request.config.getoption('--inject-method')
+    inj_enabled = True if inj_method else False
+    inj_file = cmdline_opt(request, '--inject-file', DEFAULT_GUEST_TEST_BIN)
+    if inj_method == 'ansible':
         domain_name = request.config.getoption('--domain')
-        ansible_thread = threading.Thread(target=ansible_run, args=(domain_name, guest_test_bin, queue, completed_process))
+        ansible_thread = threading.Thread(target=ansible_run, args=(domain_name, inj_file, queue, completed_process))
         ansible_thread.start()
     # follow process execution
     # stop drakvuf
     dead_thread = threading.Thread(target=watch_dead, args=(drak_proc, queue, completed_process))
     dead_thread.start()
-    event_thread = threading.Thread(target=follow_process, args=(injection_enabled, guest_test_bin, drak_proc, queue, completed_process))
+    event_thread = threading.Thread(target=follow_process, args=(inj_enabled, inj_file, drak_proc, queue,
+                                                                 completed_process))
     event_thread.start()
     timeout_thread = threading.Thread(target=test_timeout, args=(queue, completed_process))
     timeout_thread.start()
@@ -301,5 +315,5 @@ def ev_queue(request, drak_proc):
     # make sure the timeout thread is completed now
     timeout_thread.join()
     # also wait for Ansible to stop
-    if injection_method == 'ansible':
+    if inj_method == 'ansible':
         ansible_thread.join()

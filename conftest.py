@@ -255,7 +255,7 @@ def ansible_run(domain_name, guest_test_bin, queue, completed_process):
     password = ['--extra-vars', 'ansible_password=vagrant']
     scheme = ['--extra-vars', 'ansible_winrm_scheme=http']
     port = ['--extra-vars', 'ansible_port=5985']
-    run_command = ['--module-name', 'win_command', '--args', guest_test_bin]
+    run_command = ['--module-name', 'win_shell', '--args', guest_test_bin]
     # run ansible from the venv to have winrm installed
     ansible_bin = str(Path(__file__).parent / 'venv' / 'bin' / 'ansible')
     cmdline = [ansible_bin, '*']

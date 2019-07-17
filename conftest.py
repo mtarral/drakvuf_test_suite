@@ -302,16 +302,17 @@ def ev_queue(request, drak_proc):
     yield run_info
     logging.info('test finished')
     # test has completed
-    # ensure the event thread has terminated
     # event_thread: if have missed the process creation, setting the completed process anyway
     # will unlock the loop and allow the thread to terminate gracefully
     completed_process.set()
-    event_thread.join()
     dead_thread.join()
-    # stop drakvuf
+    # ensure the event thread has terminated
+    # stop drakvuf before joining the event_thread, since it might be blocked
+    # on reading a line from Drakvuf stdout
     logging.debug('stopping drakvuf')
     drak_proc.send_signal(signal.SIGINT)
     drak_proc.wait(10)
+    event_thread.join()
     # make sure the timeout thread is completed now
     timeout_thread.join()
     # also wait for Ansible to stop

@@ -64,17 +64,17 @@ Tweak them as you need.
 
 To run the test, we launch the following command:
 ~~~
-sudo ./venv/bin/pytest --domain win7 --profile /etc/libvmi/win7.json 
-    -k creatproc -x --log-level=INFO --log-file=pytest.log -v --count 200
+sudo ./venv/bin/pytest --domain win7 --profile /etc/libvmi/win7.json --inject-method createproc
+    -k injection -x --log-level=INFO --log-file=pytest.log -v --count 200
 ~~~
 
 Notes on pytest parameters:
-- `-k creatproc`: will filter all the tests discovered by pytest to select those that matches `creatproc` (So, only our test will be selected)
+- `-k injection`: will filter all the tests discovered by pytest to select those that matches `injection` (So, only our test will be selected)
 - `-x`: will stop at first failure
 - `--log-level=INFO`: pytest log level, useful to follow a long test suite, especially if you run repeated test (`--count`)
 - `--log-file=pytest.log`: log pytest output in this file (follow the test progress with a `tail -f pytest.log`)
 - `-v`: be more verbose in pytest log output (useful for debugging)
-- `--count 200`: repeat the selected tests `200` times. Useful to validate the code's robustness on multiples Drakvuf's runs.
+- `--count 200`: repeat the selected tests `200` times. Useful to validate the code's robustness on multiples Drakvuf runs.
 
 On failure, the file `drakvuf_stderr.log` will contain Drakvuf's error output of the latest failing test.
 

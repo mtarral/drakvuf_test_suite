@@ -1,0 +1,7 @@
+pytest==4.0.2
+# required for --count
+pytest-repeat==0.7.0
+
+ansible==2.7.5
+# required for Ansible injection
+pywinrm==0.3.0

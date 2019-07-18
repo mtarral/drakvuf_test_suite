@@ -64,8 +64,7 @@ Tweak them as you need.
 
 To run the test, we launch the following command:
 ~~~
-sudo ./venv/bin/pytest --domain win7 --profile /etc/libvmi/win7.json --inject-method createproc
-    -k injection -x --log-level=INFO --log-file=pytest.log -v --count 200
+sudo ./venv/bin/pytest --domain win7 --profile /etc/libvmi/win7.json --inject-method createproc -k injection -x --log-level=INFO --log-file=pytest.log -v --count 200
 ~~~
 
 Notes on pytest parameters:

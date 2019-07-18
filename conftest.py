@@ -284,9 +284,8 @@ def ansible_run(domain_name, guest_test_bin, queue, completed_process):
     cmdline.extend(run_command)
     logging.debug(cmdline)
     proc = subprocess.run(cmdline, stdout=subprocess.PIPE)
-    if re.search(r'REG\s+/\?', proc.stdout.decode()):
-        completed_process.set()
-        queue.put(None)
+    completed_process.set()
+    queue.put(None)
 
 
 @pytest.fixture(scope='function')

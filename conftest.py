@@ -176,9 +176,9 @@ def drak_proc(request):
     proc.wait(10)
 
 
-def follow_process(injection_enabled, guest_binary_path, drak_proc, queue, completed_process):
+def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue, completed_process):
     stats = Counter()
-    guest_binary_name = PureWindowsPath(guest_binary_path).name
+    guest_binary_path = PureWindowsPath(guest_binary_path)
     target_pid = None
     while not completed_process.is_set():
         line = drak_proc.stdout.readline()
@@ -193,28 +193,44 @@ def follow_process(injection_enabled, guest_binary_path, drak_proc, queue, compl
         else:
             # push event in queue
             queue.put(event)
-            if injection_enabled:
-                if event['Plugin'] == 'procmon':
+            if inj_enabled:
+                try:
                     current = PureWindowsPath(event['ProcessName'])
-                    if event['Method'] == 'NtCreateUserProcess':
-                        created = PureWindowsPath(event['ImagePathName'])
-                        logging.debug('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
-                        # Ansible injection method: match binary name
-                        # creatproc/shellexec: match conhost.exe (must start a command line application)
-                        if created.name == guest_binary_name\
-                                or created.name == "conhost.exe":
-                            # use this event as target start
-                            target_pid = int(event['NewPid'])
-                            logging.info('target started: %s (%d)', created.name, target_pid)
-                    if event['Method'] == 'NtTerminateProcess':
-                        destructed = int(event['ExitPid'])
-                        logging.debug('process %s killed %d', current.name, destructed)
-                        if destructed == target_pid:
-                            completed_process.set()
-                            # push None in queue to indicate end of events
-                            # if there was an event to catch for a test before, it has been missed
-                            queue.put(None)
-                            logging.info('target execution completed')
+                    if event['Plugin'] == 'filetracer':
+                        if 'FileName' in event:
+                            filepath = PureWindowsPath(event['FileName'].lstrip('\\?'))
+                            # TODO: match with full path instead of filename
+                            if event['Method'] == 'NtReadFile' and filepath.name == guest_binary_path.name:
+                                if target_pid is None:
+                                    created = PureWindowsPath(event['ProcessName'])
+                                    target_pid = int(event['PID'])
+                                    logging.info('[Filetracer] target started: %s (%d)', created.name, target_pid)
+                    if event['Plugin'] == 'procmon':
+                        if event['Method'] == 'NtCreateUserProcess':
+                            created = PureWindowsPath(event['ImagePathName'])
+                            logging.debug('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
+                            # Ansible injection method: match binary name
+                            # (doesn't work with scripts, because for example powershell.exe will be started and
+                            # we will try to match against '..\script.ps1', so use Filetracer in this case)
+                            # creatproc/shellexec: match conhost.exe, since there is no NtCreateUserProcess event
+                            # when starting reg.exe for example
+                            if created.name == guest_binary_path.name and inj_method == 'ansible'\
+                                    or created.name == 'conhost.exe' and inj_method != 'ansible':
+                                # use this event as target start
+                                target_pid = int(event['NewPid'])
+                                logging.info('[Procmon] target started: %s (%d)', created.name, target_pid)
+                        if event['Method'] == 'NtTerminateProcess':
+                            destructed = int(event['ExitPid'])
+                            logging.debug('process %s killed %d', current.name, destructed)
+                            if destructed == target_pid:
+                                completed_process.set()
+                                # push None in queue to indicate end of events
+                                # if there was an event to catch for a test before, it has been missed
+                                queue.put(None)
+                                logging.info('[Procmon] target execution completed')
+                except KeyError:
+                    logging.exception('Invalid Key in event %s', event)
+                    continue
         finally:
             stats['processed'] += 1
     logging.info('Processed %d events (%d) errors', stats['processed'], stats['json_error'])
@@ -289,7 +305,7 @@ def ev_queue(request, drak_proc):
     # stop drakvuf
     dead_thread = threading.Thread(target=watch_dead, args=(drak_proc, queue, completed_process))
     dead_thread.start()
-    event_thread = threading.Thread(target=follow_process, args=(inj_enabled, inj_file, drak_proc, queue,
+    event_thread = threading.Thread(target=follow_process, args=(inj_enabled, inj_method, inj_file, drak_proc, queue,
                                                                  completed_process))
     event_thread.start()
     timeout_thread = threading.Thread(target=test_timeout, args=(queue, completed_process))

@@ -1,4 +1,4 @@
-PLUGIN_LIST = ['procmon', 'crashmon', 'bsodmon']
+PLUGIN_LIST = ['procmon', 'filetracer', 'crashmon', 'bsodmon']
 
 
 def test_injection(ev_queue):

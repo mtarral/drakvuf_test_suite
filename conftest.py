@@ -39,14 +39,14 @@ DRAKVUF_PLUGIN_LIST = [
     'ssdtmon',
     'windowmon'
 ]
-# reg.exe exits immediately and prints helps if it has no argument
+# reg.exe exits immediately and prints its usage if it has no argument
 # useful to test a simple binary execution on the guest
 DEFAULT_GUEST_TEST_BIN = 'C:\\Windows\\System32\\reg.exe'
 DEFAULT_TIMEOUT = 60
 DEFAULT_INJECTION_CANDIDATE = 'taskmgr'
 
 
-# add command line options to specify domain and profile
+# add command line options to specify Drakvuf options
 def pytest_addoption(parser):
     parser.addoption(
         '--domain', action='store', help='Drakvuf domain name'

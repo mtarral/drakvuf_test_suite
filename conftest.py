@@ -195,8 +195,8 @@ def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue,
             queue.put(event)
             if inj_enabled:
                 try:
-                    current = PureWindowsPath(event['ProcessName'])
                     if event['Plugin'] == 'filetracer':
+                        current = PureWindowsPath(event['ProcessName'])
                         if 'FileName' in event:
                             filepath = PureWindowsPath(event['FileName'].lstrip('\\?'))
                             # TODO: match with full path instead of filename
@@ -206,6 +206,7 @@ def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue,
                                     target_pid = int(event['PID'])
                                     logging.info('[Filetracer] target started: %s (%d)', created.name, target_pid)
                     if event['Plugin'] == 'procmon':
+                        current = PureWindowsPath(event['ProcessName'])
                         if event['Method'] == 'NtCreateUserProcess':
                             created = PureWindowsPath(event['ImagePathName'])
                             logging.debug('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))

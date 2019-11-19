@@ -57,7 +57,7 @@ Let's run a Drakvuf test (assuming a Windows 7 VM):
 - injected into the `taskmgr` guest process
 - activating at least the plugins [`procmon`, `crashmon`, `bsodmon`] during the execution.
 
-The test can be found in `tests/test_creatproc.py`, and the CONSTANTS defined at the beginning
+The test can be found in `tests/test_injection.py`, and the CONSTANTS defined at the beginning of the file
 reflects our desired configuration for this test.
 
 Tweak them as you need.

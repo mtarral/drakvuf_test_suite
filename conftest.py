@@ -167,13 +167,17 @@ def drak_proc(request):
         proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=tmp_stderr)
         yield proc
         # only append to drakvuf_stderr.log if test failed
-        if request.node.rep_setup.passed and request.node.rep_call.failed:
-            with open('drakvuf_stderr.log', 'ab') as log_stderr:
-                tmp_stderr.seek(0)
-                log_stderr.write(tmp_stderr.read())
-    if proc.poll() is None:
-        proc.send_signal(signal.SIGINT)
-    proc.wait(10)
+        # if request.node.rep_setup.passed and request.node.rep_call.failed:
+        with open('drakvuf_stderr.log', 'ab') as log_stderr:
+            tmp_stderr.seek(0)
+            log_stderr.write(tmp_stderr.read())
+    # make sure Drakvuf process is terminated
+    # use communicate() instead of wait() to avoid a deadlock
+    # (see subprocess Popen documentation)
+    logging.debug('waiting for Drakvuf process to terminate')
+    proc.communicate(DEFAULT_TIMEOUT)
+    logging.debug('Drakvuf process terminated successfuly')
+
 
 
 def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue, completed_process):
@@ -209,7 +213,7 @@ def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue,
                         current = PureWindowsPath(event['ProcessName'])
                         if event['Method'] == 'NtCreateUserProcess':
                             created = PureWindowsPath(event['ImagePathName'])
-                            logging.debug('process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
+                            logging.debug('[Procmon] process %s started: %s (%d)', current.name, created.name, int(event['NewPid']))
                             # Ansible injection method: match binary name
                             # (doesn't work with scripts, because for example powershell.exe will be started and
                             # we will try to match against '..\script.ps1', so use Filetracer in this case)
@@ -222,7 +226,7 @@ def follow_process(inj_enabled, inj_method, guest_binary_path, drak_proc, queue,
                                 logging.info('[Procmon] target started: %s (%d)', created.name, target_pid)
                         if event['Method'] == 'NtTerminateProcess':
                             destructed = int(event['ExitPid'])
-                            logging.debug('process %s killed %d', current.name, destructed)
+                            logging.debug('[Procmon] process %s killed %d', current.name, destructed)
                             if destructed == target_pid:
                                 completed_process.set()
                                 # push None in queue to indicate end of events
@@ -323,7 +327,7 @@ def ev_queue(request, drak_proc):
     completed_process.set()
     dead_thread.join()
     # ensure the event thread has terminated
-    # stop drakvuf before joining the event_thread, since it might be blocked
+    # send SIGINT to drakvuf before joining the event_thread, since it might be blocked
     # on reading a line from Drakvuf stdout
     logging.debug('stopping drakvuf')
     drak_proc.send_signal(signal.SIGINT)
